@@ -51,15 +51,16 @@ Colab T4 + Unsloth + LoRA（r=16 全线性层，fp16 不量化——保护数字
 
 ## 效果怎么样
 
-离线验收（13 条验证集 + 四项标准）：**8 条 PASS**。3 条 FAIL 全是「输出纪律」问题（多吐了一个键 / JSON 结束后没停住），不是理解或摘要质量问题——下一版（v4）主攻方向就是它：加困难负例、收紧停止条件。
+- **v3**：离线验收（13 条验证集 + 四项标准）**8 条 PASS**。3 条 FAIL 全是「输出纪律」问题（多吐了一个键 / JSON 结束后没停住）——v4 的主攻方向。
+- **v4**：离线验收（17 条验证集）**15/17 PASS**。v3 的三类失败（SKIP 空输出、Extra data、JSON 骨架损坏）全部消失——复盘确认那是 repeat_penalty=1.2 惩罚 ChatML 骨架 token 造成的解码假象，模型本身没有此问题；剩余 2 条 FAIL 均为摘要超长（201 字 / 254 字），根源是金标准教师数据自带超长尾部，模型忠实学到了分布，属数据侧遗留。
 
 ## 部署（Ollama + n8n）
 
-模型下载：[Phanai/qwen_extractor](https://huggingface.co/Phanai/qwen_extractor)（`qwen3.5_0.8b_news_extractor_v3.gguf`，Q4_K_M，约 517MB）：
+模型下载：[Phanai/qwen_extractor](https://huggingface.co/Phanai/qwen_extractor)（`qwen3.5_0.8b_news_extractor_v4.gguf`，Q4_K_M，约 517MB；上一版 v3 仍可下载）：
 
 ```bash
 # 方式一：直接下载
-curl -LO https://huggingface.co/Phanai/qwen_extractor/resolve/main/qwen3.5_0.8b_news_extractor_v3.gguf
+curl -LO https://huggingface.co/Phanai/qwen_extractor/resolve/main/qwen3.5_0.8b_news_extractor_v4.gguf
 # 方式二：Ollama 直接拉（拉完仍需下方 Modelfile 重套模板，模型没内嵌模板）
 ollama pull hf.co/Phanai/qwen_extractor
 ```
@@ -67,7 +68,7 @@ ollama pull hf.co/Phanai/qwen_extractor
 ⚠️ **必须手写 Modelfile**。Unsloth 导出时不会给这个模型内嵌对话模板，Ollama 默认模板对不上会导致输出崩坏。TEMPLATE 必须与训练时的 ChatML 逐字一致：
 
 ```
-FROM ./qwen3.5_0.8b_news_extractor_v3.gguf
+FROM ./qwen3.5_0.8b_news_extractor_v4.gguf
 TEMPLATE """<|im_start|>system
 {{ .System }}<|im_end|>
 <|im_start|>user
@@ -77,11 +78,13 @@ TEMPLATE """<|im_start|>system
 PARAMETER temperature 0.2
 PARAMETER num_ctx 4096
 PARAMETER num_predict 500
-PARAMETER repeat_penalty 1.2
+PARAMETER repeat_penalty 1.05
 ```
 
+⚠️ **repeat_penalty 用 1.0–1.05，别沿用 v3 时代的 1.2**：1.2 会惩罚 ChatML 骨架 token，在 llama.cpp / Ollama 上可能诱发 JSON 骨架损坏或 SKIP 误判（`format:json` 只挡得住 Extra data）——这是 v4 验收复盘的结论。
+
 ```bash
-ollama create qwen_extractor_v3 -f Modelfile
+ollama create qwen_extractor_v4 -f Modelfile
 ```
 
 n8n 阶段1节点只换 model 名，`think:false`、`format:json` 保持不变。
