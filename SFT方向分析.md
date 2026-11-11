@@ -67,7 +67,7 @@
 - token 估算（Qwen 分词粗估，含模板）：均值 1881 / p95 2628 / max 2718 —— 全部落在 4096 上下文内，**答案不会被右截断**
 - 构建脚本：`work/build_dataset.py`（可重跑；原始 dump 在 `work/orig_points.json`）
 
-## 6. 训练配方（Colab T4，详见 `Qwen3.5-0.8B-SFT训练笔记.ipynb`）
+## 6. 训练配方（Colab T4，详见 `Qwen3_5_0_8B_SFT训练笔记 V4.ipynb`）
 
 沿用已验证配方（上一轮 64 样本跑通）：Unsloth + LoRA r=16 全线性层、fp16、`max_seq_length=4096`（与 Ollama `numCtx` 对齐）、ChatML 模板逐字对齐、**response-only loss**（`train_on_responses_only`，梯度集中在 2 键 JSON 输出而非复述正文）、`eval_loss` 择优加载最优 checkpoint 防过拟合。3 epochs ≈ 36 步（99 样本 × 有效批 8）。
 
