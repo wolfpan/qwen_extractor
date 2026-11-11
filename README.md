@@ -19,13 +19,12 @@
 
 ## 训练数据从哪来（这是本项目的核心）
 
-**不是网上爬的，也不是手写的。** 生产管线每天跑，会自动把「原始正文 + DeepSeek 输出」归档进 Qdrant（`ai_news_bge_orig` 集合）。我从归档库取了 **100 条真实配对**当金标准，再合成 **12 条 SKIP** 样本，共 112 条：
+**不是网上爬的，也不是手写的。** 生产管线每天跑，会自动把「原始正文 + DeepSeek 输出」归档进 Qdrant（`ai_news_bge_orig` 集合，append-only 滚动积累）。从归档库取真实配对当金标准，再合成少量 SKIP 样本：
 
-| 文件 | 内容 |
-|---|---|
-| `dataset.json` | 全量 112 条 |
-| `dataset_train.json` | 99 条训练集 |
-| `dataset_val.json` | 13 条验证集（按域名分层抽样，seed=3407） |
+| 版本 | 文件 | 条数 | 说明 |
+|---|---|---|---|
+| v3 | `data/dataset*.json` | 112 = 99 train / 13 val | 首版：100 条金标准 + 12 条合成 SKIP，训练出 v3 模型 |
+| v4 | `data/dataset_v4*.json` | 167 = 150 train / 17 val | `--live` 在线全量拉归档库构建（飞轮已转一圈） |
 
 格式是 Alpaca 三键 `{instruction, input, output}`。`instruction` 和 `input` 是从 n8n 生产节点里**逐字提取**的提示词，不是重新写的。
 
@@ -41,9 +40,10 @@
 | `SFT方向分析.md` | 项目的「为什么」：数据盘点、0.8B 六大失败模式诊断、7 条方向决策、验收标准。**建议先看这个** |
 | `Qwen3_5_0_8B_SFT训练笔记V2.ipynb` | **权威训练笔记**，Colab 免费 T4 从头跑到尾（装环境 → 训练 → 验收 → 导出 GGUF） |
 | `Qwen3.5-0.8B-SFT训练笔记.ipynb` | V1 初版（验收格有个 API bug，仅存档） |
-| `work/build_dataset.py` | 数据构建脚本，可重跑。归档库是滚动的，**每周重跑一次就能增量扩充训练集**（数据飞轮） |
-| `work/orig_points.json` | 从 Qdrant 拉的原始归档 dump |
-| `work/samples_with_meta.json` | 构建中间产物（带域名/等级元信息） |
+| `data/` | 全部数据集：v3（冻结）与 v4（滚动），Alpaca 三键格式 |
+| `work/build_dataset.py` | 数据构建脚本。默认用本地 dump 重建 v3；加 `--live` 参数在线全量拉 Qdrant 归档库构建 v4（不覆盖 v3 冻结文件）。**每周跑一次 `--live` 就能增量扩充训练集**（数据飞轮） |
+| `work/orig_points*.json` | 从 Qdrant 拉的原始归档 dump（v3 离线版 / v4 在线版） |
+| `work/samples_with_meta*.json` | 构建中间产物（带域名/等级元信息） |
 
 ## 训练配方一句话
 
@@ -55,7 +55,14 @@ Colab T4 + Unsloth + LoRA（r=16 全线性层，fp16 不量化——保护数字
 
 ## 部署（Ollama + n8n）
 
-模型下载：`qwen3.5_0.8b_news_extractor_v3.gguf`（HuggingFace 链接见下方 · 待上传）
+模型下载：[Phanai/qwen_extractor](https://huggingface.co/Phanai/qwen_extractor)（`qwen3.5_0.8b_news_extractor_v3.gguf`，Q4_K_M，约 517MB）：
+
+```bash
+# 方式一：直接下载
+curl -LO https://huggingface.co/Phanai/qwen_extractor/resolve/main/qwen3.5_0.8b_news_extractor_v3.gguf
+# 方式二：Ollama 直接拉（拉完仍需下方 Modelfile 重套模板，模型没内嵌模板）
+ollama pull hf.co/Phanai/qwen_extractor
+```
 
 ⚠️ **必须手写 Modelfile**。Unsloth 导出时不会给这个模型内嵌对话模板，Ollama 默认模板对不上会导致输出崩坏。TEMPLATE 必须与训练时的 ChatML 逐字一致：
 
@@ -82,11 +89,11 @@ n8n 阶段1节点只换 model 名，`think:false`、`format:json` 保持不变�
 ## 怎么继续迭代（数据飞轮）
 
 1. 生产管线每跑一轮，归档库自动积累新的「正文 ↔ 金标准」配对
-2. 每周重跑 `work/build_dataset.py` → 数据集自动变大
+2. 每周跑 `python work/build_dataset.py --live` 在线全量拉归档库 → 数据集自动变大（v3 → v4 已经从 112 涨到 167）
 3. 线上触发云端重提的失败案例（`_fail_reason`），其重提结果天然是「小模型错 → 金标准对」的困难样本，优先补入下一版
 
 ## 已知局限
 
-- 金标准只有 100 条，长尾版式（如 36kr 快讯只有 3 条样本）泛化有限，靠飞轮慢慢补
+- v3 金标准只有 100 条（v4 已滚动到 167），长尾版式（如 36kr 快讯样本极少）泛化有限，靠飞轮慢慢补
 - SKIP 样本全部是合成的，边界行为可能偏保守，上线后观察误判率再校准
-- 归档窗口只有 3 天，题材有时效同质（比如黄仁勋事件占了 15 条）
+- 归档窗口初期只有 3 天，题材有时效同质（比如黄仁勋事件占了 15 条），滚动再采集自然缓解

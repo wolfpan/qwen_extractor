@@ -19,6 +19,7 @@ build_dataset.py — 从 Qdrant ai_news_bge_orig 归档库构建 qwen3.5-0.8b �
   3. 增补合成 SKIP 样本，教会模型「空正文/404/访问受限/纯噪音 → SKIP」契约。
 """
 import json, re, random, sys
+import urllib.request
 from urllib.parse import urlparse
 from collections import Counter
 
@@ -26,6 +27,28 @@ random.seed(3407)
 
 WORK = r"D:\Codes\qwen3.5_0.8b_SFT\work"
 WF   = r"D:\Codes\n8n-ai-stacks\exports\抓取每日科技新闻-test.json"
+QDRANT = "http://10.8.0.5:6333"
+
+# --live：在线全量 scroll 归档库构建 v4（归档库 append-only、URL哈希幂等 upsert，
+# 全量 scroll 天然含全部历史，无需与旧 dump 合并）；产物写 dataset_v4*.json，不覆盖 v3 冻结文件。
+LIVE = "--live" in sys.argv
+
+def _post(path, body):
+    req = urllib.request.Request(QDRANT + path, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"})
+    return json.load(urllib.request.urlopen(req))
+
+def scroll_all(collection="ai_news_bge_orig"):
+    pts, offset = [], None
+    while True:
+        body = {"limit": 50, "with_payload": True, "with_vector": False}
+        if offset:
+            body["offset"] = offset
+        r = _post(f"/collections/{collection}/points/scroll", body)
+        pts += r["result"]["points"]
+        offset = r["result"].get("next_page_offset")
+        if not offset:
+            return pts
 
 # ---------------------------------------------------------------- 1. 从工作流提取逐字 prompt
 wf = json.load(open(WF, encoding="utf-8"))
@@ -83,7 +106,12 @@ def clean_v49(text: str) -> str:
     return text
 
 # ---------------------------------------------------------------- 3. 载入归档、构建金标准样本
-pts = json.load(open(f"{WORK}\\orig_points.json", encoding="utf-8"))
+if LIVE:
+    pts = scroll_all()
+    json.dump(pts, open(f"{WORK}\\orig_points_live.json", "w", encoding="utf-8"), ensure_ascii=False)
+    print(f"[--live] 在线归档库全量拉取 {len(pts)} 条 → orig_points_live.json")
+else:
+    pts = json.load(open(f"{WORK}\\orig_points.json", encoding="utf-8"))
 samples, seen_urls, dropped = [], set(), []
 
 for p in pts:
@@ -178,14 +206,15 @@ val_urls = {s["_meta"]["url"] for s in val}
 train = [s for s in samples if s["_meta"]["url"] not in val_urls]
 
 # ---------------------------------------------------------------- 7. 落盘
-OUT = r"D:\Codes\qwen3.5_0.8b_SFT"
+OUT = r"D:\Codes\qwen3.5_0.8b_SFT\data"
+TAG = "_v4" if LIVE else ""   # v3 产物冻结不被 --live 覆盖
 def strip_meta(rows):
     return [{k: v for k, v in s.items() if k != "_meta"} for s in rows]
 
-json.dump(strip_meta(samples), open(f"{OUT}\\dataset.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-json.dump(strip_meta(train),   open(f"{OUT}\\dataset_train.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-json.dump(strip_meta(val),     open(f"{OUT}\\dataset_val.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
-json.dump(samples,             open(f"{WORK}\\samples_with_meta.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+json.dump(strip_meta(samples), open(f"{OUT}\\dataset{TAG}.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+json.dump(strip_meta(train),   open(f"{OUT}\\dataset{TAG}_train.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+json.dump(strip_meta(val),     open(f"{OUT}\\dataset{TAG}_val.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
+json.dump(samples,             open(f"{WORK}\\samples_with_meta{TAG}.json", "w", encoding="utf-8"), ensure_ascii=False, indent=1)
 
 # ---------------------------------------------------------------- 8. 报告
 print(f"金标准样本: {len(gold)}  SKIP合成: {len(syn)}  总计: {len(samples)}")
