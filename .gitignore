@@ -1,0 +1,6 @@
+# 模型文件走 HuggingFace，不进 Git（517MB 超过 GitHub 单文件上限）
+*.gguf
+
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
