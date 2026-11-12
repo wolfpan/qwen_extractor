@@ -7,3 +7,8 @@ __pycache__/
 
 # perf_test.pl 每次运行重新生成的请求/响应临时件
 work/perf_*.json
+
+# sft_eval 临时产物（快照备份与派生中间文件）不入库
+work/sft_eval/_prev_*.json
+work/sft_eval/_pairs.json
+work/sft_eval/_contain.json
