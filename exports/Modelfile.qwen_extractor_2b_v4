@@ -1,0 +1,11 @@
+FROM ./qwen3.5_2b_news_extractor_v4.gguf
+TEMPLATE """<|im_start|>system
+{{ .System }}<|im_end|>
+<|im_start|>user
+{{ .Prompt }}<|im_end|>
+<|im_start|>assistant
+"""
+PARAMETER temperature 0.2
+PARAMETER num_ctx 4096
+PARAMETER num_predict 500
+PARAMETER repeat_penalty 1.05
