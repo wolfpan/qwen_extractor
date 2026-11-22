@@ -29,8 +29,8 @@ WORK = r"D:\Codes\qwen3.5_0.8b_SFT\work"
 WF   = r"D:\Codes\n8n-ai-stacks\exports\抓取每日科技新闻-test.json"
 QDRANT = "http://10.8.0.5:6333"
 
-# --live：在线全量 scroll 归档库构建 v4（归档库 append-only、URL哈希幂等 upsert，
-# 全量 scroll 天然含全部历史，无需与旧 dump 合并）；产物写 dataset_v4*.json，不覆盖 v3 冻结文件。
+# --live：在线全量 scroll 归档库构建（归档库 append-only、URL哈希幂等 upsert，
+# 全量 scroll 天然含全部历史，无需与旧 dump 合并）；v4 已转正，产物直接更新正式 dataset*.json。
 LIVE = "--live" in sys.argv
 
 def _post(path, body):
@@ -207,7 +207,7 @@ train = [s for s in samples if s["_meta"]["url"] not in val_urls]
 
 # ---------------------------------------------------------------- 7. 落盘
 OUT = r"D:\Codes\qwen3.5_0.8b_SFT\data"
-TAG = "_v4" if LIVE else ""   # v3 产物冻结不被 --live 覆盖
+TAG = ""   # v4 已转正为正式数据集，两种模式均写 dataset*.json（v3 冻结产物已被替换，历史见 git）
 def strip_meta(rows):
     return [{k: v for k, v in s.items() if k != "_meta"} for s in rows]
 

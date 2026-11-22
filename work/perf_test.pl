@@ -10,7 +10,7 @@ my $pick_arg = $ARGV[1] // 'median';
 my $host = $ENV{OLLAMA_HOST} // 'http://10.8.0.5:11434';
 
 # 逐行提取 instruction/input（值本身已是 JSON 转义串，可直接嵌入请求，不做整体 decode）
-open my $fh, '<:raw', 'data/dataset_v4_val.json' or die "open val: $!";
+open my $fh, '<:raw', 'data/dataset_val.json' or die "open val: $!";
 my (@instr, @input);
 my $cur_i = '';
 while (my $line = <$fh>) {

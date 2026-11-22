@@ -31,8 +31,8 @@
 
 | 版本 | 文件 | 条数 | 说明 |
 |---|---|---|---|
-| v3 | `data/dataset*.json` | 112 = 99 train / 13 val | 首版：100 条金标准 + 12 条合成 SKIP，训练出 v3 模型 |
-| v4 | `data/dataset_v4*.json` | 167 = 150 train / 17 val | `--live` 在线全量拉归档库构建（飞轮已转一圈） |
+| v3 | （已被 v4 替换，历史见 git） | 112 = 99 train / 13 val | 首版：100 条金标准 + 12 条合成 SKIP，训练出 v3 模型 |
+| v4 | `data/dataset*.json`（现行正式） | 167 = 150 train / 17 val | `--live` 在线全量拉归档库构建（飞轮已转一圈），已转正为正式文件名 |
 
 格式是 Alpaca 三键 `{instruction, input, output}`。`instruction` 和 `input` 是从 n8n 生产节点里**逐字提取**的提示词，不是重新写的。
 
@@ -47,8 +47,8 @@
 |---|---|
 | `SFT方向分析.md` | 项目的「为什么」：数据盘点、0.8B 六大失败模式诊断、7 条方向决策、验收标准。**建议先看这个** |
 | `Qwen3_5_0_8B_SFT训练笔记 V4.ipynb` | **权威训练笔记**，Colab 免费 T4 从头跑到尾（装环境 → 训练 → 验收 → 导出 GGUF）。V1/V2 已删除，历史见 git |
-| `data/` | 全部数据集：v3（冻结）与 v4（滚动），Alpaca 三键格式 |
-| `work/build_dataset.py` | 数据构建脚本。默认用本地 dump 重建 v3；加 `--live` 参数在线全量拉 Qdrant 归档库构建 v4（不覆盖 v3 冻结文件）。**每周跑一次 `--live` 就能增量扩充训练集**（数据飞轮） |
+| `data/` | 正式数据集（v4，滚动更新），Alpaca 三键格式；v3 已被替换，历史见 git |
+| `work/build_dataset.py` | 数据构建脚本。默认用本地 dump 重建；加 `--live` 参数在线全量拉 Qdrant 归档库构建（推荐），产物直接写正式 `data/dataset*.json`。**每周跑一次 `--live` 就能增量扩充训练集**（数据飞轮） |
 | `work/perf_test.pl` | Ollama 部署性能快测：取验证集真实样本按生产参数请求 `/api/chat`，输出 prefill / 生成速度（需 perl + curl，`OLLAMA_HOST` 可覆盖服务器地址） |
 | `work/orig_points*.json` | 从 Qdrant 拉的原始归档 dump（v3 离线版 / v4 在线版） |
 | `work/samples_with_meta*.json` | 构建中间产物（带域名/等级元信息） |
